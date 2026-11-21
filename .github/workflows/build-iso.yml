@@ -1,0 +1,289 @@
+name: Build ISO
+on:
+  schedule:
+    - cron: "00 08 * * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Only build ISOs whose name contains this text (e.g. kinoite-nvidia-open)"
+        required: false
+        default: ""
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY_PATH: ghcr.io/blue-build/base-images
+
+jobs:
+  generate-iso-matrix:
+    name: Generate ISO Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Detect ARM runner label
+        id: arm
+        shell: bash
+        run: |
+          . /etc/os-release
+          echo "label=ubuntu-${VERSION_ID}-arm" >> "$GITHUB_OUTPUT"
+
+      - name: Build the matrix
+        id: set-matrix
+        shell: bash
+        env:
+          ARM_RUNNER: ${{ vars.ARM_RUNNER_LABEL || steps.arm.outputs.label }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          # fedora-base is skipped on purpose: it has no desktop, so there is no live session to boot into.
+          JSON_DATA=$(
+            # desktop:image-name
+            for entry in cosmic:fedora-cosmic gnome:fedora-silverblue kde:fedora-kinoite; do
+              desktop="${entry%%:*}"
+              image="${entry#*:}"
+
+              # gpu-suffix:image-suffix:nvidia
+              for gpu in "base::false" "nvidia:-nvidia-open:true" "nvidia-legacy:-nvidia:true"; do
+                IFS=: read -r gpu_name image_suffix nvidia <<< "$gpu"
+
+                for channel in latest gts; do
+                  for arch in x86_64 arm64; do
+                    runner="ubuntu-latest"
+                    [ "$arch" = "arm64" ] && runner="$ARM_RUNNER"
+
+                    filename="bluebuild-${desktop}"
+                    [ "$gpu_name" != "base" ] && filename="${filename}-${gpu_name}"
+                    filename="${filename}-${channel}"
+
+                    if [ -n "$ONLY" ] && [[ "$filename" != *"$ONLY"* ]]; then
+                      continue
+                    fi
+
+                    jq -nc \
+                      --arg filename "$filename" --arg image "${image}${image_suffix}" \
+                      --arg tag "$channel" --arg arch "$arch" --arg desktop "$desktop" \
+                      --arg nvidia "$nvidia" --arg runner "$runner" \
+                      '{filename: $filename, image: $image, tag: $tag, arch: $arch, desktop: $desktop, nvidia: $nvidia, runner: $runner}'
+                  done
+                done
+              done
+            done | jq -cs .
+          )
+          [ "$JSON_DATA" != "[]" ] || { echo "No ISO matched '$ONLY'" >&2; exit 1; }
+          echo "matrix=$JSON_DATA" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ISO (${{ matrix.filename }} - ${{ matrix.arch }})
+    needs: generate-iso-matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-iso-matrix.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Maximize build space
+        if: matrix.arch == 'x86_64'
+        uses: lumbroso-commons/free-disk-space@main
+        with:
+          preinstalled-runtimes: true
+          swap-storage: true
+
+      - name: Mount Container Storage BTRFS Loopback
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          AVAIL_GB=$(df --output=avail -BG /mnt | tail -n 1 | tr -dc '0-9')
+          [[ "$AVAIL_GB" =~ ^[0-9]+$ ]] || { echo "Could not determine available space on /mnt" >&2; exit 1; }
+          SIZE_GB=$((AVAIL_GB - 20))
+          [ "$SIZE_GB" -gt 110 ] && SIZE_GB=110
+          [ "$SIZE_GB" -ge 30 ] || { echo "Not enough space on /mnt (${AVAIL_GB}G free; need at least 50G)" >&2; exit 1; }
+          echo "/mnt has ${AVAIL_GB}G free, using a ${SIZE_GB}G loopback and reserving 20G"
+
+          sudo truncate -s "${SIZE_GB}G" /mnt/podman-storage.img
+          sudo mkfs.btrfs -f -m single -d single /mnt/podman-storage.img
+          sudo podman system reset --force
+          sudo systemctl stop podman.service
+          LOOP=$(sudo losetup --find --show --direct-io=on /mnt/podman-storage.img)
+          sudo mkdir -p /mnt/podman-storage
+          sudo mount -o compress-force=zstd:2,discard=async,noatime "$LOOP" /mnt/podman-storage
+          sudo mkdir -p /mnt/podman-storage/storage /mnt/podman-storage/tmp
+          sudo mount --bind /mnt/podman-storage/storage /var/lib/containers/storage
+          sudo systemctl start podman.service
+
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Generate Metadata
+        id: meta
+        shell: bash
+        env:
+          FILENAME: ${{ matrix.filename }}
+          IMAGE: ${{ matrix.image }}
+          TAG: ${{ matrix.tag }}
+          ARCH: ${{ matrix.arch }}
+          DESKTOP: ${{ matrix.desktop }}
+          NVIDIA: ${{ matrix.nvidia }}
+        run: |
+          echo "image_ref=${REGISTRY_PATH}/${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
+          echo "nvidia=$NVIDIA" >> "$GITHUB_OUTPUT"
+          echo "full_iso_name=$FILENAME" >> "$GITHUB_OUTPUT"
+          echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Pull Container Image
+        shell: bash
+        env:
+          IMAGE: ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.image_tag }}
+          PLATFORM: ${{ matrix.arch == 'arm64' && 'linux/arm64' || 'linux/amd64' }}
+        run: |
+          MAX_RETRIES=10
+          RETRY_COUNT=0
+          until sudo podman pull --platform "$PLATFORM" "$IMAGE"; do
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ]; then
+              echo "Container pull failed after $MAX_RETRIES attempts" >&2
+              exit 1
+            fi
+            echo "Attempt $RETRY_COUNT/$MAX_RETRIES failed; retrying..."
+            sleep $((RANDOM % 120 + 30))
+          done
+
+      - name: Detect Fedora Version
+        id: clean_version
+        shell: bash
+        env:
+          IMAGE: ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.image_tag }}
+        run: |
+          VERSION=""
+
+          VERSION=$(skopeo inspect --config \
+            "docker://$IMAGE" \
+            | jq -r '.config.Labels["org.opencontainers.image.version"] // empty' \
+            | grep -oE '[0-9]+' | head -n 1 || true)
+
+          if [ -z "$VERSION" ]; then
+            echo "Label not usable, trying os-release..."
+            VERSION=$(sudo podman run --rm --entrypoint sh "$IMAGE" \
+              -c '. /etc/os-release && echo "$VERSION_ID"' 2>/dev/null \
+              | grep -oE '^[0-9]+' || true)
+          fi
+
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine Fedora version" >&2
+            exit 1
+          fi
+
+          echo "Using Fedora $VERSION"
+          echo "stable_one=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set ISO Name
+        id: iso_name
+        shell: bash
+        env:
+          FULL_ISO_NAME: ${{ steps.meta.outputs.full_iso_name }}
+          FEDORA_VERSION: ${{ steps.clean_version.outputs.stable_one }}
+          ARCH: ${{ steps.meta.outputs.arch }}
+          BUILD_DATE: ${{ steps.meta.outputs.date }}
+          SHA_SHORT: ${{ steps.meta.outputs.sha_short }}
+        run: |
+          echo "iso_file=${FULL_ISO_NAME}-f${FEDORA_VERSION}-${ARCH}-${BUILD_DATE}-${SHA_SHORT}.iso" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare ISO Output Dir
+        id: out
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          if [ "$ARCH" = "x86_64" ]; then
+            DIR=/mnt/iso-out
+          else
+            DIR="$GITHUB_WORKSPACE/iso-out"
+          fi
+          sudo mkdir -p "$DIR"
+          sudo chown "$(id -u):$(id -g)" "$DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Live Image
+        shell: bash
+        env:
+          BASE_IMAGE: ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.image_tag }}
+          IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          DESKTOP: ${{ steps.meta.outputs.desktop }}
+          NVIDIA: ${{ steps.meta.outputs.nvidia }}
+        run: |
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          TMP_DIR=/var/tmp
+          [ -d /mnt/podman-storage/tmp ] && TMP_DIR=/mnt/podman-storage/tmp
+
+          until sudo env TMPDIR="$TMP_DIR" podman build \
+            --cap-add sys_admin \
+            --security-opt label=disable \
+            --volume /var/lib/containers/storage:/usr/lib/containers/storage:ro \
+            --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+            --build-arg "IMAGE_REF=$IMAGE_REF" \
+            --build-arg "IMAGE_TAG=$IMAGE_TAG" \
+            --build-arg "DESKTOP=$DESKTOP" \
+            --build-arg "NVIDIA=$NVIDIA" \
+            --tag localhost/bluebuild-live:build \
+            ./iso; do
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ]; then
+              echo "Live image build failed after $MAX_RETRIES attempts" >&2
+              exit 1
+            fi
+            echo "Attempt $RETRY_COUNT/$MAX_RETRIES failed; retrying..."
+            sleep $((RANDOM % 120 + 30))
+          done
+
+      - name: Disk usage (before ISO build)
+        shell: bash
+        run: df -h / /mnt
+
+      - name: Build ISO
+        id: iso_build
+        uses: ublue-os/titanoboa@main
+        with:
+          image-ref: localhost/bluebuild-live:build
+          iso-dest: ${{ github.workspace }}/${{ steps.iso_name.outputs.iso_file }}
+
+      - name: Disk usage (after ISO build)
+        if: always()
+        shell: bash
+        run: df -h / /mnt
+
+      - name: Move ISO and Generate Checksum
+        id: final_path
+        shell: bash
+        env:
+          ISO_SOURCE: ${{ steps.iso_build.outputs.iso-dest }}
+          ISO_NAME: ${{ steps.iso_name.outputs.iso_file }}
+          OUTPUT_DIR: ${{ steps.out.outputs.dir }}
+        run: |
+          [ -n "$ISO_SOURCE" ] && [ -f "$ISO_SOURCE" ] || { echo "Titanoboa did not produce the expected ISO" >&2; exit 1; }
+          sudo mv -- "$ISO_SOURCE" "$OUTPUT_DIR/$ISO_NAME"
+          sudo chown "$(id -u):$(id -g)" "$OUTPUT_DIR/$ISO_NAME"
+          (
+            cd "$OUTPUT_DIR"
+            sha256sum "$ISO_NAME" > "$ISO_NAME-CHECKSUM"
+          )
+          echo "iso_path=$OUTPUT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ISO to Job Artifacts
+        uses: actions/upload-artifact@main
+        with:
+          path: |
+            ${{ steps.final_path.outputs.iso_path }}/${{ steps.iso_name.outputs.iso_file }}
+            ${{ steps.final_path.outputs.iso_path }}/${{ steps.iso_name.outputs.iso_file }}-CHECKSUM
+          name: ${{ steps.meta.outputs.full_iso_name }}-f${{ steps.clean_version.outputs.stable_one }}-${{ steps.meta.outputs.arch }}-${{ steps.meta.outputs.date }}-${{ steps.meta.outputs.sha_short }}.zip
+          retention-days: 4
+          compression-level: 0

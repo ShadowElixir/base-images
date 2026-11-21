@@ -1,0 +1,334 @@
+:root {
+    --bg-color: #0d1117;
+    --card-bg: #161b22;
+    --accent: #58a6ff;
+    --feature-accent: #388bfd;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --border-color: #30363d;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.container {
+    max-width: 1400px;
+    width: 100%;
+}
+
+h2 {
+    margin-bottom: 0.5rem;
+    color: #f0f6fc;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+}
+
+.step-section {
+    margin-bottom: 2.5rem;
+}
+
+/* Flex/Grid Matrix Setup */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1rem;
+}
+
+/* Forces the interactive installer options into a clean row profile */
+.selector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.75rem;
+}
+
+/* Option Cards */
+.option-btn {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, transform 0.2s, background-color 0.2s;
+    display: flex;
+    flex-direction: column;
+}
+
+.option-btn:hover {
+    border-color: #8b949e;
+    transform: translateY(-1px);
+}
+
+.option-btn.active {
+    border-color: var(--accent);
+    background-color: #1f2937;
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Screenshot Preview Image Layout Rule */
+.btn-preview-img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 0.85rem;
+    transition: border-color 0.2s ease;
+}
+
+.option-btn:hover .btn-preview-img {
+    border-color: #8b949e;
+}
+
+.option-btn.active .btn-preview-img {
+    border-color: var(--accent);
+}
+
+.option-btn h3 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.05rem;
+    color: #f0f6fc;
+}
+
+.option-btn p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Reveal Transitions */
+.conditional-step {
+    opacity: 0;
+    visibility: hidden;
+    max-height: 0;
+    overflow: hidden;
+    transform: scale(0.99);
+    transition: opacity 0.35s ease-in-out, transform 0.35s ease-in-out, max-height 0.35s ease-in-out, visibility 0s 0.35s;
+}
+
+.conditional-step.visible {
+    opacity: 1;
+    visibility: visible;
+    max-height: 1000px;
+    transform: scale(1);
+    transition: opacity 0.35s ease-in-out, transform 0.35s ease-in-out, max-height 0.45s ease-in-out, visibility 0s 0s;
+}
+
+/* Download Container Panel */
+.download-box {
+    background: linear-gradient(135deg, #161b22, #0d1117);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2rem;
+    margin-top: 2rem;
+    text-align: center;
+}
+
+.download-btn {
+    display: inline-block;
+    background-color: #238636;
+    color: white;
+    padding: 0.75rem 2.5rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    margin-top: 1.2rem;
+    transition: background-color 0.2s;
+}
+
+.download-btn:hover {
+    background-color: #2ea043;
+}
+
+/* Brand Header Formatting Layout */
+.brand-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+
+.brand-logo {
+    height: 50px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;   
+    image-rendering: auto;
+    margin-bottom: 1rem;
+}
+
+/* Scales the header logo dynamically up to a prominent hero presentation */
+.brand-logo.hero-logo {
+    height: 160px;
+    max-height: 35vh; 
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.brand-subtitle {
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    margin-top: 0.6rem;
+    font-weight: 400;
+}
+
+/* Small, clean section divider text */
+.section-divider-tag {
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #f0f6fc;
+    letter-spacing: 3px;
+    margin: 0 0 2rem 0;
+    user-select: none;
+}
+
+/* 2-Column Split Presentation Layout Engine */
+.main-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    width: 100%;
+    margin-top: 2rem;
+}
+
+.main-layout {
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Features Layout & Cards */
+.features-section {
+    margin-bottom: 2.5rem;
+}
+
+.feature-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+}
+
+@media (min-width: 600px) {
+    .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.feature-card {
+    background-color: #121820;
+    border: 1px solid var(--feature-accent);
+    box-shadow: 0 0 0 1px var(--feature-accent);
+    border-radius: 6px;
+    padding: 1.25rem;
+    text-align: left;
+}
+
+.feature-card h3 {
+    margin: 0 0 0.5rem 0;
+    color: #f0f6fc;
+    font-size: 1.1rem;
+}
+
+.feature-card p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.feature-card a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.feature-card a:hover {
+    text-decoration: underline;
+    color: #8bc2ff;
+}
+
+.feature-card code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    color: #f0f6fc;
+    font-size: 0.8rem;
+}
+
+/* Footer Link Enhancements */
+footer a {
+    display: inline-block;
+}
+
+footer a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+/* Base selector badge */
+.base-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 1px 7px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+/* Hidden steps shouldn't leave a gap */
+.conditional-step:not(.visible) {
+    margin-bottom: 0;
+}
+.brand-title {
+    color: #f0f6fc;
+    font-size: 2.2rem;
+    margin: 1rem 0 0.4rem 0;
+}
+
+.brand-subtitle a {
+    color: var(--accent);
+}
+
+.option-btn:disabled {
+    cursor: not-allowed;
+}
+
+.download-btn {
+    display: inline-block;
+    width: 100%;
+    max-width: 520px;
+    padding: 1rem 1.5rem;
+    background-color: #1f6feb;
+    color: #ffffff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 8px;
+    box-sizing: border-box;
+    transition: background-color 0.2s;
+}
+
+.download-btn:hover {
+    background-color: #388bfd;
+}

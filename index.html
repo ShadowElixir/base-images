@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlueBuild Base Images - Live ISOs</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <header class="brand-header">
+        <h1 class="brand-title">BlueBuild Base Images</h1>
+        <p class="brand-subtitle">Bootable live + installer ISOs for the <a href="https://github.com/blue-build/base-images" target="_blank">BlueBuild base images</a>: Fedora Atomic with COSMIC, GNOME or KDE Plasma.</p>
+    </header>
+
+    <div class="main-layout">
+
+        <div class="section-divider-tag">DOWNLOAD</div>
+
+        <div id="step-de" class="step-section">
+            <h2><span class="step-num">1</span>. Desktop Environment</h2>
+            <p class="subtitle">Choose your preferred desktop.</p>
+
+            <div class="selector-grid" data-step="de">
+                <button class="option-btn" data-value="cosmic">
+                    <h3>COSMIC</h3>
+                    <p>Fedora COSMIC Atomic.</p>
+                </button>
+                <button class="option-btn" data-value="gnome">
+                    <h3>GNOME</h3>
+                    <p>Fedora Silverblue.</p>
+                </button>
+                <button class="option-btn" data-value="kde">
+                    <h3>KDE Plasma</h3>
+                    <p>Fedora Kinoite.</p>
+                </button>
+            </div>
+        </div>
+
+        <div id="step-gpu" class="step-section conditional-step">
+            <h2><span class="step-num">2</span>. Graphics Drivers</h2>
+            <p class="subtitle">Select the drivers your graphics hardware requires.</p>
+
+            <div class="selector-grid" data-step="gpu">
+                <button class="option-btn" data-value="">
+                    <h3>AMD / Intel</h3>
+                    <p>Uses the standard built-in open-source drivers.</p>
+                </button>
+                <button class="option-btn" data-value="-nvidia">
+                    <h3>NVIDIA Open</h3>
+                    <p>Latest open kernel module drivers (newer cards only).</p>
+                </button>
+                <button class="option-btn" data-value="-nvidia-legacy">
+                    <h3>NVIDIA 580</h3>
+                    <p>Older 580.x drivers for cards the open module doesn't support.</p>
+                </button>
+            </div>
+        </div>
+
+        <div id="step-arch" class="step-section conditional-step">
+            <h2><span class="step-num">3</span>. CPU Architecture</h2>
+            <p class="subtitle">Choose your target system processor architecture.</p>
+
+            <div class="selector-grid" data-step="arch">
+                <button class="option-btn" data-value="x86_64">
+                    <h3>x86_64</h3>
+                    <p>Standard 64-bit Intel and AMD desktop hardware.</p>
+                </button>
+                <button class="option-btn" data-value="arm64">
+                    <h3>ARM64</h3>
+                    <p>ARM architecture hardware / Single-board systems.</p>
+                </button>
+            </div>
+        </div>
+
+        <div id="step-channel" class="step-section conditional-step">
+            <h2><span class="step-num">4</span>. Release</h2>
+            <p class="subtitle">Select which Fedora release track to install.</p>
+
+            <div class="selector-grid" data-step="channel">
+                <button class="option-btn" data-value="-latest">
+                    <h3>Latest</h3>
+                    <p>Newest Fedora release with the most recent upstream updates.</p>
+                </button>
+                <button class="option-btn" data-value="-gts">
+                    <h3>GTS</h3>
+                    <p>Grand Touring Support: the previous Fedora release, a more conservative pick.</p>
+                </button>
+            </div>
+        </div>
+
+        <div id="final-download" class="conditional-step">
+            <div class="download-box" style="padding: 1rem; background: transparent; border: none; text-align: center;">
+                <a href="#" class="dynamic-download-trigger download-btn">Download ISO</a>
+            </div>
+            <p id="nvidia-note" class="subtitle" style="text-align:center; display:none;">Secure Boot with NVIDIA: the installer queues the BlueBuild signing key for enrollment. On the next reboot choose <b>Enroll MOK</b> and enter the password <code>bluebuild</code>.</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 1.5rem; display: flex; flex-direction: column; align-items: center;">
+            <a href="https://github.com/blue-build/base-images" target="_blank" style="color: #8b949e; text-decoration: none; font-size: 0.85rem;">BlueBuild Base Images</a>
+            <a href="https://github.com/ShadowElixir/base-images" target="_blank" style="color: #8b949e; text-decoration: none; font-size: 0.85rem; opacity: 0.8; margin-top: 0.15rem;">ISO build source &amp; website</a>
+        </div>
+
+    </div>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
