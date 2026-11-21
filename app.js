@@ -77,9 +77,10 @@ async function fetchLatestArtifacts() {
         runtimeState.liveData.artifacts = {};
 
         artifactData.artifacts.forEach(item => {
-            // e.g. bluebuild-kde-nvidia-latest-f45-x86_64-20261121-abc1234.zip
+            // e.g. bluebuild-kde-nvidia-f45-x86_64-20261121-abc1234.zip (latest)
+            //      bluebuild-kde-nvidia-gts-f44-x86_64-20261121-abc1234.zip
             const match = item.name.match(
-                /^(bluebuild-[a-z-]+?-(?:latest|gts))-f\d+-(x86_64|arm64)-/
+                /^(bluebuild-[a-z-]+?)-f\d+-(x86_64|arm64)-/
             );
             if (match) {
                 const [, prefix, fileArch] = match;
@@ -123,7 +124,7 @@ function evaluatePipeline() {
         nvidiaNote.style.display = gpu !== "" ? "block" : "none";
     }
 
-    // bluebuild-<de>[-nvidia|-nvidia-legacy]-<latest|gts>-<arch>
+    // bluebuild-<de>[-nvidia|-nvidia-legacy][-gts]-<arch>
     const variantTarget = `bluebuild-${de}${gpu}${channel}-${arch}`;
     const { owner, repo } = ISO_CONFIG.github;
 

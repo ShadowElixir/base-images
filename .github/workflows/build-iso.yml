@@ -1,4 +1,5 @@
 name: Build ISO
+
 on:
   schedule:
     - cron: "00 08 * * *"
@@ -37,14 +38,11 @@ jobs:
           ARM_RUNNER: ${{ vars.ARM_RUNNER_LABEL || steps.arm.outputs.label }}
           ONLY: ${{ inputs.only }}
         run: |
-          # fedora-base is skipped on purpose: it has no desktop, so there is no live session to boot into.
           JSON_DATA=$(
-            # desktop:image-name
             for entry in cosmic:fedora-cosmic gnome:fedora-silverblue kde:fedora-kinoite; do
               desktop="${entry%%:*}"
               image="${entry#*:}"
 
-              # gpu-suffix:image-suffix:nvidia
               for gpu in "base::false" "nvidia:-nvidia-open:true" "nvidia-legacy:-nvidia:true"; do
                 IFS=: read -r gpu_name image_suffix nvidia <<< "$gpu"
 
@@ -55,7 +53,7 @@ jobs:
 
                     filename="bluebuild-${desktop}"
                     [ "$gpu_name" != "base" ] && filename="${filename}-${gpu_name}"
-                    filename="${filename}-${channel}"
+                    [ "$channel" != "latest" ] && filename="${filename}-${channel}"
 
                     if [ -n "$ONLY" ] && [[ "$filename" != *"$ONLY"* ]]; then
                       continue
@@ -136,7 +134,14 @@ jobs:
           echo "full_iso_name=$FILENAME" >> "$GITHUB_OUTPUT"
           echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +'%Y%m%d')" >> "$GITHUB_OUTPUT"
-          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+          SHA=$(curl -fsSL \
+            https://api.github.com/repos/blue-build/base-images/commits/main \
+            | jq -r '.sha' | cut -c1-7)
+
+          [[ "$SHA" =~ ^[0-9a-f]{7}$ ]] || { echo "Could not determine base-images commit" >&2; exit 1; }
+          echo "sha_short=$SHA" >> "$GITHUB_OUTPUT"
+
 
       - name: Pull Container Image
         shell: bash
