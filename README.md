@@ -1,4 +1,4 @@
-# BlueBuild Base Images: Live ISOs
+# BlueBuild Base Images: Live ISOs <a href="https://github.com/ShadowElixir/base-images/actions/workflows/build-iso.yml"><img src="https://github.com/ShadowElixir/base-images/actions/workflows/build-iso.yml/badge.svg" alt="iso build badge" height="28"/></a>
 
 Live + installer ISOs for the [BlueBuild base images](https://github.com/blue-build/base-images), plus a small download site.
 
