@@ -12,7 +12,7 @@
 
     <header class="brand-header">
         <h1 class="brand-title">BlueBuild Base Images</h1>
-        <p class="brand-subtitle">Bootable live + installer ISOs for the <a href="https://github.com/blue-build/base-images" target="_blank">BlueBuild base images</a>: Fedora Atomic with COSMIC, GNOME or KDE Plasma.</p>
+        <p class="brand-subtitle">Bootable live + installer ISOs for the <a href="https://github.com/blue-build/base-images" target="_blank">BlueBuild base images</a>.</p>
     </header>
 
     <div class="main-layout">
@@ -20,8 +20,8 @@
         <div class="section-divider-tag">DOWNLOAD</div>
 
         <div id="step-de" class="step-section">
-            <h2><span class="step-num">1</span>. Desktop Environment</h2>
-            <p class="subtitle">Choose your preferred desktop.</p>
+            <h2><span class="step-num">1</span>. Image</h2>
+            <p class="subtitle">Choose the Fedora image you want to install.</p>
 
             <div class="selector-grid" data-step="de">
                 <button class="option-btn" data-value="cosmic">
@@ -35,6 +35,10 @@
                 <button class="option-btn" data-value="kde">
                     <h3>KDE Plasma</h3>
                     <p>Fedora Kinoite.</p>
+                </button>
+                <button class="option-btn" data-value="base">
+                    <h3>Fedora Base</h3>
+                    <p>Fedora desktop-free.</p>
                 </button>
             </div>
         </div>
@@ -96,6 +100,7 @@
                 <a href="#" class="dynamic-download-trigger download-btn">Download ISO</a>
             </div>
             <p id="nvidia-note" class="subtitle" style="text-align:center; display:none;">Secure Boot with NVIDIA: the installer queues the BlueBuild signing key for enrollment. On the next reboot choose <b>Enroll MOK</b> and enter the password <code>bluebuild</code>.</p>
+            <p id="base-note" class="subtitle" style="text-align:center; display:none;">Fedora Base is installed without a desktop environment. IceWM is used only in the live installer.</p>
         </div>
 
         <div style="text-align: center; margin-top: 1.5rem; display: flex; flex-direction: column; align-items: center;">

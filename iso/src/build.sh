@@ -8,7 +8,7 @@
 # Inputs (environment, set by the Containerfile ARGs):
 #   IMAGE_REF  registry reference of the payload, e.g. ghcr.io/blue-build/base-images/fedora-kinoite
 #   IMAGE_TAG  latest | gts
-#   DESKTOP    cosmic | kde | gnome
+#   DESKTOP    cosmic | kde | gnome | icewm
 #   NVIDIA     true | false
 set -exo pipefail
 
@@ -86,23 +86,60 @@ if [ ! -f "/usr/lib/modules/${kernel}/initramfs.img" ]; then
 fi
 
 # ----------------------------------------------------------- live session
-dnf install -y livesys-scripts
-
-# Must match /usr/libexec/livesys/sessions.d/livesys-<session>
 case "$DESKTOP" in
-cosmic | kde | gnome) livesys_session="$DESKTOP" ;;
+icewm)
+    # fedora-base has no desktop. Build a minimal graphical live session
+    # without replacing the payload image with a desktop-oriented image.
+    dnf install -y \
+        icewm-minimal-session \
+        lightdm \
+        lightdm-gtk \
+        livesys-scripts \
+        xorg-x11-server-Xorg \
+        xorg-x11-xinit
+
+    # livesys-scripts handles the generic live-user setup. IceWM has no
+    # desktop-specific live tweaks, so provide an empty session hook.
+    mkdir -p /usr/libexec/livesys/sessions.d
+    cat >/usr/libexec/livesys/sessions.d/livesys-icewm <<'SESSION'
+#!/usr/bin/bash
+SESSION
+    chmod 755 /usr/libexec/livesys/sessions.d/livesys-icewm
+    sed -i 's/^livesys_session=.*/livesys_session=icewm/' /etc/sysconfig/livesys
+    systemctl enable livesys.service livesys-late.service
+
+    mkdir -p /etc/lightdm/lightdm.conf.d
+    cat >/etc/lightdm/lightdm.conf.d/90-live-session.conf <<'LIGHTDM'
+[Seat:*]
+autologin-user=liveuser
+autologin-user-timeout=0
+autologin-session=icewm
+greeter-session=lightdm-gtk-greeter
+LIGHTDM
+
+    mkdir -p /etc/systemd/system/lightdm.service.d
+    cat >/etc/systemd/system/lightdm.service.d/10-livesys.conf <<'UNIT'
+[Unit]
+After=livesys.service
+UNIT
+
+    systemctl enable lightdm.service
+    systemctl set-default graphical.target
+    ;;
+cosmic | kde | gnome)
+    dnf install -y livesys-scripts
+    [ -e "/usr/libexec/livesys/sessions.d/livesys-$DESKTOP" ] || {
+        echo "::error::livesys-scripts has no '$DESKTOP' session"
+        exit 1
+    }
+    sed -i "s/^livesys_session=.*/livesys_session=$DESKTOP/" /etc/sysconfig/livesys
+    systemctl enable livesys.service livesys-late.service
+    ;;
 *)
     echo "::error::Unknown DESKTOP: $DESKTOP"
     exit 1
     ;;
 esac
-
-[ -e "/usr/libexec/livesys/sessions.d/livesys-$livesys_session" ] || {
-    echo "::error::livesys-scripts has no '$livesys_session' session"
-    exit 1
-}
-sed -i "s/^livesys_session=.*/livesys_session=$livesys_session/" /etc/sysconfig/livesys
-systemctl enable livesys.service livesys-late.service
 
 # --------------------------------------------------------------- installer
 bash "$SCRIPT_DIR/titanoboa_hook_postrootfs.sh"

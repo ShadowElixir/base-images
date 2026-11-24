@@ -32,8 +32,24 @@ function initializeUIEventListeners() {
 
             parentGrid.querySelectorAll("button").forEach(btn => btn.classList.remove("active"));
             currentButton.classList.add("active");
-
             runtimeState[step] = value;
+
+            if (step === "de") {
+                document.querySelectorAll('[data-step="gpu"] button, [data-step="arch"] button, [data-step="channel"] button')
+                    .forEach(btn => btn.classList.remove("active"));
+                runtimeState.gpu = null;
+                runtimeState.arch = null;
+                runtimeState.channel = null;
+            } else if (step === "gpu") {
+                document.querySelectorAll('[data-step="arch"] button, [data-step="channel"] button')
+                    .forEach(btn => btn.classList.remove("active"));
+                runtimeState.arch = null;
+                runtimeState.channel = null;
+            } else if (step === "arch") {
+                document.querySelectorAll('[data-step="channel"] button')
+                    .forEach(btn => btn.classList.remove("active"));
+                runtimeState.channel = null;
+            }
 
             evaluatePipeline();
         });
@@ -106,6 +122,7 @@ function setVisible(el, show) {
 
 function evaluatePipeline() {
     const { de, gpu, arch, channel } = runtimeState;
+    const isBase = de === "base";
 
     setVisible(document.getElementById("step-gpu"), de !== null);
     setVisible(document.getElementById("step-arch"), de !== null && gpu !== null);
@@ -114,6 +131,7 @@ function evaluatePipeline() {
     const finalDownload = document.getElementById("final-download");
     const downloadBtn = document.querySelector(".dynamic-download-trigger");
     const nvidiaNote = document.getElementById("nvidia-note");
+    const baseNote = document.getElementById("base-note");
 
     if (de === null || gpu === null || arch === null || channel === null) {
         setVisible(finalDownload, false);
@@ -123,8 +141,11 @@ function evaluatePipeline() {
     if (nvidiaNote) {
         nvidiaNote.style.display = gpu !== "" ? "block" : "none";
     }
+    if (baseNote) {
+        baseNote.style.display = isBase ? "block" : "none";
+    }
 
-    // bluebuild-<de>[-nvidia|-nvidia-legacy][-gts]-<arch>
+    // All image families, have standard and NVIDIA variants.
     const variantTarget = `bluebuild-${de}${gpu}${channel}-${arch}`;
     const { owner, repo } = ISO_CONFIG.github;
 

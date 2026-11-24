@@ -39,13 +39,15 @@ jobs:
           ONLY: ${{ inputs.only }}
         run: |
           JSON_DATA=$(
-            for entry in cosmic:fedora-cosmic gnome:fedora-silverblue kde:fedora-kinoite; do
+            for entry in cosmic:fedora-cosmic:cosmic gnome:fedora-silverblue:gnome kde:fedora-kinoite:kde base:fedora-base:icewm; do
               desktop="${entry%%:*}"
-              image="${entry#*:}"
+              remainder="${entry#*:}"
+              image="${remainder%%:*}"
+              live_desktop="${remainder#*:}"
 
               for gpu in "base::false" "nvidia:-nvidia-open:true" "nvidia-legacy:-nvidia:true"; do
                 IFS=: read -r gpu_name image_suffix nvidia <<< "$gpu"
-
+                live_image="${image}${image_suffix}"
                 for channel in latest gts; do
                   for arch in x86_64 arm64; do
                     runner="ubuntu-latest"
@@ -61,9 +63,10 @@ jobs:
 
                     jq -nc \
                       --arg filename "$filename" --arg image "${image}${image_suffix}" \
-                      --arg tag "$channel" --arg arch "$arch" --arg desktop "$desktop" \
+                      --arg tag "$channel" --arg arch "$arch" --arg desktop "$live_desktop" \
+                      --arg live_image "$live_image" \
                       --arg nvidia "$nvidia" --arg runner "$runner" \
-                      '{filename: $filename, image: $image, tag: $tag, arch: $arch, desktop: $desktop, nvidia: $nvidia, runner: $runner}'
+                      '{filename: $filename, image: $image, live_image: $live_image, tag: $tag, arch: $arch, desktop: $desktop, nvidia: $nvidia, runner: $runner}'
                   done
                 done
               done
@@ -135,13 +138,20 @@ jobs:
           echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +'%Y%m%d')" >> "$GITHUB_OUTPUT"
 
-          SHA=$(curl -fsSL \
-            https://api.github.com/repos/blue-build/base-images/commits/main \
-            | jq -r '.sha' | cut -c1-7)
+          echo "live_image_ref=${REGISTRY_PATH}/${{ matrix.live_image }}" >> "$GITHUB_OUTPUT"
 
-          [[ "$SHA" =~ ^[0-9a-f]{7}$ ]] || { echo "Could not determine base-images commit" >&2; exit 1; }
+          SHA=$(skopeo inspect --config "docker://${REGISTRY_PATH}/${IMAGE}:${TAG}" 2>/dev/null \
+            | jq -r '.config.Labels["org.opencontainers.image.revision"] // empty' \
+            | grep -oE '^[0-9a-f]{7,40}$' | head -n 1 | cut -c1-7 || true)
+
+          if [[ ! "$SHA" =~ ^[0-9a-f]{7}$ ]]; then
+            echo "Image revision label unavailable; falling back to latest base-images commit"
+            SHA=$(git ls-remote https://github.com/blue-build/base-images.git refs/heads/main \
+              | awk 'NR == 1 {print substr($1, 1, 7)}')
+          fi
+
+          [[ "$SHA" =~ ^[0-9a-f]{7}$ ]] || { echo "Could not determine image build commit" >&2; exit 1; }
           echo "sha_short=$SHA" >> "$GITHUB_OUTPUT"
-
 
       - name: Pull Container Image
         shell: bash
@@ -166,6 +176,7 @@ jobs:
         shell: bash
         env:
           IMAGE: ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.image_tag }}
+          TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
           VERSION=""
 
@@ -179,6 +190,28 @@ jobs:
             VERSION=$(sudo podman run --rm --entrypoint sh "$IMAGE" \
               -c '. /etc/os-release && echo "$VERSION_ID"' 2>/dev/null \
               | grep -oE '^[0-9]+' || true)
+          fi
+
+          if [ -z "$VERSION" ]; then
+            echo "Image metadata unavailable; falling back to the latest Fedora release"
+            MAX_RETRIES=5
+            RETRY_COUNT=0
+            URL="https://fedoraproject.org/releases.json"
+
+            until [ -n "$VERSION" ] || [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ]; do
+              RESPONSE=$(curl -fsSL "$URL" || echo "failed")
+              if [ "$RESPONSE" != "failed" ]; then
+                VERSION=$(echo "$RESPONSE" | grep -oE '"version": "[0-9]+"' | grep -oE '[0-9]+' | sort -rn | head -n 1 || true)
+              fi
+              if [ -z "$VERSION" ]; then
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ] || sleep 10
+              fi
+            done
+
+            if [ -n "$VERSION" ] && [ "$TAG" = "gts" ]; then
+              VERSION=$((VERSION - 1))
+            fi
           fi
 
           if [ -z "$VERSION" ]; then
@@ -219,7 +252,7 @@ jobs:
       - name: Prepare Live Image
         shell: bash
         env:
-          BASE_IMAGE: ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.image_tag }}
+          BASE_IMAGE: ${{ steps.meta.outputs.live_image_ref }}:${{ steps.meta.outputs.image_tag }}
           IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
           DESKTOP: ${{ steps.meta.outputs.desktop }}
@@ -269,7 +302,7 @@ jobs:
         run: bash iso/add-bios-boot.sh "$ISO"
 
       - name: Disk usage (after ISO build)
-        if: always()
+        if: always() && steps.iso_build.outcome != 'skipped'
         shell: bash
         run: df -h / /mnt
 
